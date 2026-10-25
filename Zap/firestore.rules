@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create, update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.uid == userId
+        && request.resource.data.keys().hasOnly([
+          'uid', 'displayName', 'email', 'photoURL', 'createdAt', 'updatedAt'
+        ]);
+      allow delete: if false;
+
+      match /{markerCollection}/{markerId} {
+        allow read, delete: if signedIn()
+          && request.auth.uid == userId
+          && markerCollection in ['savedReels', 'likedReels', 'repostedReels', 'following'];
+        allow create, update: if signedIn()
+          && request.auth.uid == userId
+          && markerCollection in ['savedReels', 'likedReels', 'repostedReels', 'following']
+          && request.resource.data.id == markerId
+          && request.resource.data.keys().hasOnly(['id', 'creatorHandle', 'createdAt']);
+      }
+    }
+
+    match /reels/{reelId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'id', 'ownerId', 'handle', 'displayName', 'avatarUrl', 'caption', 'tags',
+          'videoUrl', 'poster', 'audio', 'track', 'description', 'likes', 'comments',
+          'reposts', 'views', 'score', 'createdAt', 'postedAt'
+        ]);
+      allow update, delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if signedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 1000
+          && request.resource.data.keys().hasOnly([
+            'uid', 'displayName', 'avatarUrl', 'text', 'createdAt'
+          ]);
+        allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+        allow update: if false;
+      }
+
+      match /likes/{userId} {
+        allow read: if true;
+        allow create, update: if signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.uid == userId
+          && request.resource.data.keys().hasOnly(['uid', 'createdAt']);
+        allow delete: if signedIn() && request.auth.uid == userId;
+      }
+
+      match /reposts/{userId} {
+        allow read: if true;
+        allow create, update: if signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.uid == userId
+          && request.resource.data.keys().hasOnly(['uid', 'createdAt']);
+        allow delete: if signedIn() && request.auth.uid == userId;
+      }
+    }
+  }
+}
